@@ -33,7 +33,7 @@ create_domain(Domain) ->
     try genericRequest("CreateDomain", 
 		       Domain, "", [], []) of
 	{ok, Body} ->
-		{XmlDoc, _Rest} = xmerl:scan_string(Body),
+		{XmlDoc, _Rest} = xmerl_scan:string(Body),
 		[#xmlText{value=RequestId}|_] =
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc), 
 	    {ok, {requestId, RequestId}}
