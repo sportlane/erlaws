@@ -57,7 +57,7 @@ queryParams( ParamList ) ->
 %% THE POSSIBILITY OF SUCH DAMAGE.
 
 
-url_encode(Str) when list(Str) ->
+url_encode(Str) when is_list(Str) ->
     url_encode_char(lists:reverse(Str), []).
 
 url_encode_char([X | T], Acc) when X >= $0, X =< $9 ->
