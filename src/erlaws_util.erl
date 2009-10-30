@@ -11,18 +11,11 @@ iso_8601_fmt(DateTime, Zone) ->
 		  [Year, Month, Day, Hour, Min, Sec, Zone]).
 
 mkEnumeration(Values, Separator) ->
-    lists:flatten(lists:reverse(mkEnumeration(Values, Separator, []))).
-
-mkEnumeration([], _Separator, Acc) ->
-    Acc;
-mkEnumeration([Head|[]], _Separator, Acc) ->
-    [Head | Acc];
-mkEnumeration([Head|Tail], Separator, Acc) ->
-    mkEnumeration(Tail, Separator, [Separator, Head | Acc]).
+    lists:flatten(string:join(Values, Separator)).
 
 queryParams( [] ) -> "";
 queryParams( ParamList ) -> 
-    "?" ++ mkEnumeration([url_encode(Param) ++ "=" ++ url_encode(Value) 
+    "?" ++ mkEnumeration([[url_encode(Param), "=", url_encode(Value)]
 			  || {Param, Value} <- ParamList], "&" ).
 
 %% The following code is taken from the ibrowse Http client
