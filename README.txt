@@ -1,6 +1,6 @@
 Erlaws provides Erlang interfaces to various Amazon WebService offerings.
 
-This code is no longer maintained, so feel free to fork it.
+This code is a fork of x6j8x/erlaws, which is officially marked as "no longer maintained".
 
 -- original documentation from Google Code wiki --
 
@@ -9,7 +9,7 @@ Erlaws is a collection of client implementations of Amazon's WebServices offerin
 
 = Build =
 
-Check out the latest code from svn and issue {{{erl -make}}} to build the sources.
+Check out the latest code from github (git clone git://github.com/vlm/erlaws) and issue `erl -make` to build the sources.
 
 = Usage =
 
