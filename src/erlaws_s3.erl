@@ -363,7 +363,10 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 	buildContentMD5Header(ContentMD5) ++
 	HTTPHeaders,
 
-    [ContentType] = [Value || {"Content-Type", Value} <- HTTPHeaders],
+    ContentType = case [Value || {"Content-Type", Value} <- HTTPHeaders] of
+		[CT|_] -> CT;
+		[] -> ""
+	end,
     
     {AccessKey, SecretAccessKey } = {AWS_KEY, AWS_SEC_KEY},
 
