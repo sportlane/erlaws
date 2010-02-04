@@ -10,19 +10,21 @@
 
 %% API
 -export([list_buckets/0, create_bucket/1, create_bucket/2, delete_bucket/1]).
--export([list_contents/1, list_contents/2, put_object/5, get_object/2]).
+-export([list_contents/1, list_contents/2, put_object/5, put_file/5, get_object/2]).
 -export([info_object/2, delete_object/2]).
 
 %% include record definitions
 -include_lib("xmerl/include/xmerl.hrl").
+-include_lib("kernel/include/file.hrl").
 -include("../include/erlaws.hrl").
 
 %% macro definitions
--define( AWS_S3_HOST, "s3.amazonaws.com").
--define( NR_OF_RETRIES, 3).
--define( CALL_TIMEOUT, indefinite).
--define( S3_REQ_ID_HEADER, "x-amz-request-id").
--define( PREFIX_XPATH, "//CommonPrefixes/Prefix/text()").
+-define(AWS_S3_HOST, "s3.amazonaws.com").
+-define(NR_OF_RETRIES, 3).
+-define(CALL_TIMEOUT, indefinite).
+-define(S3_REQ_ID_HEADER, "x-amz-request-id").
+-define(PREFIX_XPATH, "//CommonPrefixes/Prefix/text()").
+-define(CHUNK_SIZE, 8 * 1024).
 
 %% Returns a list of all of the buckets owned by the authenticated sender 
 %% of the request.
@@ -193,6 +195,33 @@ put_object(Bucket, Key, Data, HTTPHeaders, Metadata) ->
 	    {error, Descr}
     end.
 
+put_file(Bucket, Key, FileName, ContentType, Metadata) ->
+    Date = httpd_util:rfc1123_date(erlang:localtime()),
+    {FileSize, File} = openAndGetFileSize(FileName),
+    Headers = 
+        buildContentHeaders(FileSize) ++
+	buildMetadataHeaders(Metadata),
+    Signature = sign(AWS_SEC_KEY,
+                     stringToSign("PUT", "", ContentType, Date,
+                                  Bucket, Key, Headers)),
+    FinalHeaders = [ {"Authorization", "AWS " ++ AWS_KEY ++ ":" ++ Signature },
+		     {"Host", buildHost(Bucket) },
+		     {"Date", Date },
+		     {"Content-Type", ContentType}
+		     | Headers ],
+    Payload = 
+        lists:append(
+          ["PUT /", Key, " HTTP/1.1\n",
+           lists:flatten([lists:append([K, ": ", V, "\n"]) || 
+                             {K, V} <- lists:reverse(FinalHeaders)]),
+           "\n"]),
+    {ok, Socket} = gen_tcp:connect(?AWS_S3_HOST, 80, 
+                                   [binary, {active, false}, {packet, 0}]),
+    gen_tcp:send(Socket, list_to_binary(Payload)),
+    sendData(Socket, File),
+    gen_tcp:close(Socket),
+    file:close(File).
+       
 %% Retrieves the data associated with the given key.
 %% 
 %% Spec: get_object(Bucket::string(), Key::string()) ->
@@ -312,6 +341,8 @@ buildUrl(Bucket,Path,QueryParams) ->
     buildProtocol() ++ Bucket ++ "." ++ ?AWS_S3_HOST ++ "/" ++ Path ++ 
 	erlaws_util:queryParams(QueryParams).
 
+buildContentHeaders(Contents) when is_integer(Contents) -> 
+    [{"Content-Length", integer_to_list(Contents)}];
 % Detect gzip header and put appropriate Content-Encoding. Questionable?..
 buildContentHeaders(<<16#1f, 16#8b, _/binary>> = Contents) -> 
     [{"Content-Length", integer_to_list(size(Contents))},
@@ -338,7 +369,6 @@ stringToSign ( Verb, ContentMD5, ContentType, Date, Bucket, Path,
 	canonicalizeResource(Bucket, Path).
 
 sign (Key,Data) ->
-    %io:format("StringToSign:~n ~p~n", [Data]),
     binary_to_list( base64:encode( crypto:sha_mac(Key,Data) ) ).
 
 genericRequest( Method, Bucket, Path, QueryParams, Metadata,
@@ -371,7 +401,7 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
     {AccessKey, SecretAccessKey } = {AWS_KEY, AWS_SEC_KEY},
 
     Signature = sign(SecretAccessKey,
-		     stringToSign( MethodString, ContentMD5, ContentType, Date,
+		     stringToSign(MethodString, ContentMD5, ContentType, Date,
 				   Bucket, Path, Headers )),
     
     FinalHeaders = [ {"Authorization","AWS " ++ AccessKey ++ ":" ++ Signature },
@@ -389,8 +419,6 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
-
-    %%io:format("Request:~n ~p~n", [Request]),
 
     Reply = http:request( Method, Request, HttpOptions, Options ),
     
@@ -436,5 +464,20 @@ extractObjectInfo (Node) ->
     #s3_object_info{key=Key#xmlText.value, lastmodified=LastModified#xmlText.value,
 		 etag=ETag#xmlText.value, size=Size#xmlText.value}.
 
+openAndGetFileSize(FileName) ->
+    case file:open(FileName, [read, binary]) of
+        {ok, File} ->
+            {ok, #file_info{size=Size}} = file:read_file_info(FileName),
+            {Size, File};
+        _ ->
+            {error, no_file}
+    end.
 
-
+sendData(Socket, File) ->
+    case file:read(File, ?CHUNK_SIZE) of
+        {ok, Data} ->
+            gen_tcp:send(Socket, Data),
+            sendData(Socket, File);
+        eof ->
+            ok
+    end.
