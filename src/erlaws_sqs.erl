@@ -302,14 +302,17 @@ delete_message(QueueUrl, ReceiptHandle) ->
 
 %% internal methods
 
-sign (Key,Data) ->
+sign(Key,Data) ->
     %%%% io:format("Sign:~n ~p~n", [Data]),
-    binary_to_list( base64:encode( crypto:sha_mac(Key,Data) ) ).
+    binary_to_list(base64:encode(crypto:sha_mac(Key,Data))).
 
 query_request(Action, Parameters) ->
-	query_request(case SECURE of 
-			true -> "https://";
-			_ -> "http://" end ++ ?AWS_SQS_HOST ++ "/", Action, Parameters).
+	if
+		SECURE -> Prefix = "https://";
+		true -> Prefix = "http://"
+	end,
+	
+	query_request(Prefix ++ ?AWS_SQS_HOST ++ "/", Action, Parameters).
 
 query_request(Url, Action, Parameters) ->
 	%% io:format("query_request: ~p ~p ~p~n", [Url, Action, Parameters]),
