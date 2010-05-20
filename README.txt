@@ -1,7 +1,5 @@
 Erlaws provides Erlang interfaces to various Amazon WebService offerings.
 
-This code is no longer maintained, so feel free to fork it.
-
 -- original documentation from Google Code wiki --
 
 = Description = 
@@ -9,7 +7,7 @@ Erlaws is a collection of client implementations of Amazon's WebServices offerin
 
 = Build =
 
-Check out the latest code from svn and issue {{{erl -make}}} to build the sources.
+Issue `erl -make` to build the sources.
 
 = Usage =
 
@@ -36,6 +34,7 @@ Here a short overview:
   * list_contents/1
   * list_contents/2
   * put_object/5
+  * put_file/5
   * get_object/2
   * info_object/2
   * delete_object/2
