@@ -1,9 +1,7 @@
 Erlaws provides Erlang interfaces to various Amazon WebService offerings.
 
--- original documentation from Google Code wiki --
-
 = Description = 
-Erlaws is a collection of client implementations of Amazon's WebServices offerings. Currently there are clients for S3, SQS and SDB.
+Erlaws is a collection of client implementations of Amazon's WebServices offerings. Currently there are clients for EC2, S3, SQS and SDB.
 
 = Build =
 
@@ -11,7 +9,7 @@ Issue `erl -make` to build the sources.
 
 = Usage =
 
-All erlaws modules (erlaws_s3, _sdb, _sqs) are now parameterized modules. You can create a new instance of a modules using (example for erlaws_sdb):
+All erlaws modules (erlaws_s3, _sdb, _sqs, _ec2) are now parameterized modules. You can create a new instance of a modules using (example for erlaws_sdb):
 
 SDB = erlaws_sdb:new(AWS_KEY, AWS_SEC_KEY, (true|false)).
 
@@ -70,3 +68,11 @@ Here a short overview:
   * list_items/2 
   * query_items/2
   * query_items/3
+
+== erlaws_ec2 ==
+  * start_instances/1 
+  * run_instances/13 
+  * stop_instances/2
+  * terminate_instances/1
+  * describe_instances/0
+  * describe_instances/1
