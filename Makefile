@@ -1,18 +1,25 @@
-# store output so is only executed once
-ERL_LIBS=$(shell erl -eval 'io:format("~s~n", [code:lib_dir()])' -s init stop -noshell)
-# get application vsn from app file
-VSN=$(shell erl -pa ebin/ -eval 'application:load(erlaws), {ok, Vsn} = application:get_key(erlaws, vsn), io:format("~s~n", [Vsn])' -s init stop -noshell)
+SUBDIRS	=	src 
+include ./include.mk
+include ./vsn.mk
 
-all:
-	@erl -make
 
-clean:
-	@rm -rf erl_crash.dump ebin/*.beam
+all debug clean:	
+	@set -e ; \
+	  for d in $(SUBDIRS) ; do \
+	    if [ -f $$d/Makefile ]; then ( cd $$d && $(MAKE) $@ ) || exit 1 ; fi ; \
+	  done
 
-plt:
-	@dialyzer --build_plt --output_plt .plt -q -r . -I include/
+install:	all 
+	@erl -make \
+	set -e ; \
+	for d in $(SUBDIRS) ; do \
+	    if [ -f $$d/Makefile ]; then ( cd $$d && $(MAKE) $@ ) || exit 1 ; fi ; \
+	  done; \
+	echo "** beam files went into $(DESTDIR)/$(APPDIR)/ebin"
 
-check: all
-	@dialyzer --check_plt --plt .plt -q -r . -I include/
+conf_clean:
+	-rm include.mk config.cache config.status config.log 2> /dev/null
 
-FORCE:
+touch:
+	find . -name '*' -print | xargs touch -m
+	find . -name '*.erl' -print | xargs touch -m
