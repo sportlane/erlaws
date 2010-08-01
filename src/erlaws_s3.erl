@@ -248,7 +248,7 @@ get_object(Bucket, Key) ->
 	throw:{error, Descr} ->
 	    {error, Descr}
     end.
-
+    
 %% Returns the metadata associated with the given key.
 %%
 %% Spec: info_object(Bucket::string(), Key::string()) ->
@@ -439,7 +439,7 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
  	{ok, {{_HttpVersion, Code, _ReasonPhrase}, ResponseHeaders, 
 	      ResponseBody }} when Code=:=200; Code=:=204 -> 
  	    {ok, ResponseHeaders, ResponseBody};
-	
+
 	{ok, {{_HttpVersion, Code, ReasonPhrase}, ResponseHeaders, 
 	      _ResponseBody }} when Code=:=500, NrOfRetries == 0 ->
 	    throw ({error, "500", ReasonPhrase, 
@@ -451,9 +451,15 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 	    genericRequest(Method, Bucket, Path, QueryParams, 
 			   Metadata, HTTPHeaders, Body, NrOfRetries-1);
 	
- 	{ok, {{_HttpVersion, _HttpCode, _ReasonPhrase}, ResponseHeaders, 
+ 	{ok, {{_HttpVersion, HttpCode, ReasonPhrase}, ResponseHeaders, 
 	      ResponseBody }} ->
- 	    throw ( mkErr(ResponseBody, ResponseHeaders) )
+	    throw (try mkErr(ResponseBody, ResponseHeaders) of
+		      {error, Reason} -> {error, Reason}
+		  catch
+		      exit:_Error ->
+			  {error, {integer_to_list(HttpCode), ReasonPhrase, 
+			   proplists:get_value(?S3_REQ_ID_HEADER, ResponseHeaders)}}
+		  end)
     end.
 
 mkErr (Xml, Headers) ->
