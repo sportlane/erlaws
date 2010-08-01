@@ -81,9 +81,18 @@ create_bucket(Bucket) ->
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
 %%
 create_bucket(Bucket, eu) ->
-    LCfg = <<"<CreateBucketConfiguration>
-                  <LocationConstraint>EU</LocationConstraint>
-             </CreateBucketConfiguration>">>,
+    create_bucket(Bucket, 'EU');
+%% Creates a new bucket with a location constraint.
+%% ex) create_bucket("bucket", 'ap-southeast-1')
+%%
+%% Spec: create_bucket(Bucket::string(), Region::atom()) ->
+%%       {ok, Bucket::string()} |
+%%       {error, {Code::string(), Msg::string(), ReqId::string()}}
+create_bucket(Bucket, Region) ->
+    LCfgStr = io_lib:format("<CreateBucketConfiguration>
+                  <LocationConstraint>~s</LocationConstraint>
+             </CreateBucketConfiguration>", [Region]),
+    LCfg = list_to_binary(LCfgStr),
     try genericRequest(put, Bucket, "", [], [], [], LCfg) of
 	{ok, Headers, _Body} ->
 		RequestId = case lists:keytake("x-amz-request-id", 1, Headers) of

@@ -27,7 +27,7 @@ Here a short overview:
 
   * list_buckets/0
   * create_bucket/1
-  * create_bucket/2 (for EU buckets)
+  * create_bucket/2 (for EU and other region buckets)
   * delete_bucket/1
   * list_contents/1
   * list_contents/2
