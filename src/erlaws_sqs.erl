@@ -118,12 +118,19 @@ list_queues(Prefix) ->
 get_queue_url(QueueName) ->
     try query_request("ListQueues", [{"QueueNamePrefix", QueueName}]) of
 	{ok, Body} ->
-	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
+	    {XmlDoc, _Rest} = xmerl_scan:string(Body),	    
 	    QueueNodes = xmerl_xpath:string("//QueueUrl/text()", XmlDoc),
 		[#xmlText{value=RequestId}|_] =
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
-	    [QueueUrl|_] = [Queue || #xmlText{value=Queue} <- QueueNodes],
-	    {ok, QueueUrl, {requestId, RequestId}}
+	    case [Url || Url <- [Queue || #xmlText{value=Queue} <- QueueNodes],
+			 string:right(Url, length(QueueName) + 1) =:= "/" ++ QueueName] of
+		[] ->
+		    {error, no_match};
+		[QueueUrl] ->
+		    {ok, QueueUrl, {requestId, RequestId}};
+		[QueueUrl|_] ->
+		    throw(too_many_matches)
+	    end
     catch
 		throw:{error, Descr} ->
 	    	{error, Descr}
