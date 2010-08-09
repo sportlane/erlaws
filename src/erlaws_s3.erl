@@ -184,7 +184,7 @@ put_object(Bucket, Key, Data, ContentType, Metadata) when is_integer(hd(ContentT
 %% Spec: put_object(Bucket::string(), Key::string(), Data::binary(),
 %%                  HTTPHeaders::[{Key::string(), Value::string()}]
 %%                  Metadata::[{Key::string(), Value::string()}]) ->
-%%       {ok, #s3_object_info(key=Key::string(), size=Size::integer())} |
+%%       {ok, #s3_object_info(key=Key::string(), size=Size::integer()), ReqId::string()} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
 %%
 %% EXAMPLE:
