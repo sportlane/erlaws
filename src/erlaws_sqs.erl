@@ -367,6 +367,12 @@ mkErr(Xml) ->
 	    [] -> "";
 	    [EMsg|_] -> EMsg#xmlText.value
 	end,
-    [#xmlText{value=RequestId}|_] = xmerl_xpath:string("//RequestID/text()", 
-						       XmlDoc),
+    RequestId = case xmerl_xpath:string("//RequestID/text()", XmlDoc) of
+		    [#xmlText{value=Value}|_] -> Value;
+		    _ ->
+			case xmerl_xpath:string("//RequestId/text()", XmlDoc) of
+			    [#xmlText{value=Value}|_] -> Value;
+			    _ -> ""
+			end
+		end,
     {ErrorCode, ErrorMessage, {requestId, RequestId}}.
