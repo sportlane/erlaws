@@ -113,7 +113,8 @@ list_queues(Prefix) ->
 %%
 %% Spec: get_queue(QueueName::string()) ->
 %%       {ok, QueueUrl::string(), {requestId, ReqId::string()}} |
-%%       {error, {HTTPStatus::string, HTTPReason::string()}, {Code::string(), Message::string(), {requestId, ReqId::string()}}}
+%%       {error, {HTTPStatus::string, HTTPReason::string()}, {Code::string(), Message::string(), {requestId, ReqId::string()}}} |
+%%       {error, no_match}
 %%
 get_queue_url(QueueName) ->
     try query_request("ListQueues", [{"QueueNamePrefix", QueueName}]) of
