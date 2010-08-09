@@ -121,7 +121,7 @@ get_queue_url(QueueName) ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
 	    QueueNodes = xmerl_xpath:string("//QueueUrl/text()", XmlDoc),
 		[#xmlText{value=RequestId}|_] =
-			xmerl_xpath:string("//ResponseMetadata/RequestId/text", XmlDoc),
+			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    [QueueUrl|_] = [Queue || #xmlText{value=Queue} <- QueueNodes],
 	    {ok, QueueUrl, {requestId, RequestId}}
     catch
