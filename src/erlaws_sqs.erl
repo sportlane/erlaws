@@ -129,7 +129,7 @@ get_queue_url(QueueName) ->
 		    {error, no_match};
 		[QueueUrl] ->
 		    {ok, QueueUrl, {requestId, RequestId}};
-		[QueueUrl|_] ->
+		[_QueueUrl|_] ->
 		    throw(too_many_matches)
 	    end
     catch
