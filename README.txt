@@ -6,6 +6,7 @@ Erlaws is a collection of client implementations of Amazon's WebServices offerin
 = Build =
 
 Issue `erl -make` to build the sources.
+If you get 'error write file' errors, do `mkdir ebin`.
 
 = Usage =
 
