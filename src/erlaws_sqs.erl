@@ -30,7 +30,7 @@
 %%
 %% Spec: create_queue(QueueName::string()) ->
 %%       {ok, QueueUrl::string(), {requestId, RequestId::string()}} |
-%%       {error, {Code::string, Msg::string(), ReqId::string()}}
+%%       {error, {HTTPStatus::string, HTTPReason::string()}, {Code::string(), Message::string(), {requestId, ReqId::string()}}}
 %% 
 create_queue(QueueName) ->
     try query_request("CreateQueue", [{"QueueName", QueueName}]) of
@@ -42,8 +42,8 @@ create_queue(QueueName) ->
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    {ok, QueueUrl, {requestId, RequestId}}
     catch
-	throw:{error, Descr} ->
-	    {error, Descr}
+	throw:{error, Descr, Err} ->
+	    {error, Descr, Err}
     end.
 
 %% Creates a new SQS queue with the given name and default VisibilityTimeout.
@@ -63,8 +63,8 @@ create_queue(QueueName, VisibilityTimeout) when is_integer(VisibilityTimeout) ->
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    {ok, QueueUrl, {requestId, RequestId}}
     catch
-		throw:{error, Descr} ->
-	    	{error, Descr}
+		throw:{error, Descr, Err} ->
+	    	{error, Descr, Err}
     end.
 	
 
@@ -85,8 +85,8 @@ list_queues() ->
 		%% io:format("RequestId: ~p~n", [RequestId]),
 	    {ok, [QueueUrl || #xmlText{value=QueueUrl} <- QueueNodes], {requestId, RequestId}}
     catch
-		throw:{error, Descr} ->
-	    	{error, Descr}
+		throw:{error, Descr, Err} ->
+	    	{error, Descr, Err}
     end.
 
 %% Returns a list of existing queues (QueueUrls) whose names start
@@ -105,8 +105,8 @@ list_queues(Prefix) ->
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    {ok, [Queue || #xmlText{value=Queue} <- QueueNodes], {requestId, RequestId}}
     catch
-		throw:{error, Descr} ->
-	    	{error, Descr}
+		throw:{error, Descr, Err} ->
+	    	{error, Descr, Err}
     end.
     
 %% Returns the Url for a specific queue-name
@@ -133,8 +133,8 @@ get_queue_url(QueueName) ->
 		    throw(too_many_matches)
 	    end
     catch
-		throw:{error, Descr} ->
-	    	{error, Descr}
+		throw:{error, Descr, Err} ->
+	    	{error, Descr, Err}
     end.
 
 %% Returns the attributes for the given QueueUrl
@@ -163,8 +163,8 @@ get_queue_attr(QueueUrl) ->
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    {ok, AttrList, {requestId, RequestId}}
     catch
-	throw:{error, Descr} ->
-	    {error, Descr}
+	throw:{error, Descr, Err} ->
+	    {error, Descr, Err}
     end.
 
 %% This function allows you to alter the default VisibilityTimeout for
@@ -186,8 +186,8 @@ set_queue_attr(visibility_timeout, QueueUrl, Timeout)
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    {ok, {requestId, RequestId}}
     catch
-	throw:{error, Descr} ->
-	    {error, Descr}
+	throw:{error, Descr, Err} ->
+	    {error, Descr, Err}
     end.
 
 %% Deletes the queue identified by the given QueueUrl.
@@ -204,8 +204,8 @@ delete_queue(QueueUrl) ->
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 		{ok, {requestId, RequestId}}
     catch
-	throw:{error, Descr} ->
-	    {error, Descr}
+	throw:{error, Descr, Err} ->
+	    {error, Descr, Err}
     end.
 
 %% messages
@@ -228,8 +228,8 @@ send_message(QueueUrl, Message) ->
 		[#xmlText{value=RequestId}|_] = xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    {ok, #sqs_message{messageId=MessageId, contentMD5=ContentMD5, body=Message}, {requestId, RequestId}}
     catch
-	throw:{error, Descr} ->
-	    {error, Descr}
+	throw:{error, Descr, Err} ->
+	    {error, Descr, Err}
     end.
 
 
@@ -285,8 +285,8 @@ receive_message(QueueUrl, NrOfMessages, VisibilityTimeout) when is_integer(NrOfM
 				     true
 				 end], {requestId, RequestId}}
     catch
-		throw:{error, Descr} ->
-	    	{error, Descr}
+		throw:{error, Descr, Err} ->
+	    	{error, Descr, Err}
     end.
 
 %% Deletes a message from a queue
@@ -304,8 +304,8 @@ delete_message(QueueUrl, ReceiptHandle) ->
 		  xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    {ok, {requestId, RequestId}}
     catch
-	throw:{error, Descr} ->
-	    {error, Descr}
+	throw:{error, Descr, Err} ->
+	    {error, Descr, Err}
     end.
 
 %% internal methods
