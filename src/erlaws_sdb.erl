@@ -455,8 +455,9 @@ genericRequest(Action, Domain, Item,
     case Result of
 	{ok, _Status, Body} ->
 	    {ok, Body};
-	{error, {_Proto, Code, Reason}, Body} ->
-	    throw({error, {integer_to_list(Code), Reason}, mkErr(Body)})
+	{error, {_Proto, _Code, _Reason}, Body} ->
+	    %throw({error, {integer_to_list(Code), Reason}, mkErr(Body)})
+	    throw({error, mkErr(Body)})
     end.
 
 getQueryParams("CreateDomain", Domain, _Item, _Attributes, _Options) ->
