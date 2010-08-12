@@ -442,8 +442,8 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 
 	{ok, {{_HttpVersion, Code, ReasonPhrase}, ResponseHeaders, 
 	      _ResponseBody }} when Code=:=500, NrOfRetries == 0 ->
-	    throw ({error, "500", ReasonPhrase, 
-		    proplists:get_value(?S3_REQ_ID_HEADER, ResponseHeaders)});
+	    throw ({error, {"500", ReasonPhrase, 
+		    proplists:get_value(?S3_REQ_ID_HEADER, ResponseHeaders)}});
 	
 	{ok, {{_HttpVersion, Code, _ReasonPhrase}, _ResponseHeaders, 
 	      _ResponseBody }} when Code=:=500 ->
