@@ -17,7 +17,7 @@
 -include_lib("xmerl/include/xmerl.hrl").
 
 -define(AWS_SDB_HOST, "sdb.amazonaws.com").
-%-define(AWS_SDB_VERSION, "2007-11-07").
+-define(OLD_AWS_SDB_VERSION, "2007-11-07").
 -define(AWS_SDB_VERSION, "2009-04-15").
 
 %% This function creates a new SimpleDB domain. The domain name must be unique among the 
@@ -324,6 +324,9 @@ get_attributes(Domain, Item, Attribute) when is_list(Domain),
 %% domains contains more then 100 item you must use list_items/2 to
 %% retrieve all items.
 %%
+%% WARNING: This function depends on deprecated operation "Query"
+%% which exists only on old SimpleDB API (version 2007-11-07).
+%%
 %% Spec: list_items(Domain::string()) ->
 %%       {ok, Items::[string()], []} |
 %%       {ok, Items::[string()], NextToken::string()} |
@@ -340,6 +343,9 @@ list_items(Domain) ->
 %% the total item count exceeds max_items you must call this function
 %% again with the NextToken value provided in the return value.
 %%
+%% WARNING: This function depends on deprecated operation "Query"
+%% which exists only on old SimpleDB API (version 2007-11-07).
+%%
 %% Spec: list_items(Domain::string(), Options::[{atom(), (integer() | string())}]) ->
 %%       {ok, Items::[string()], []} |
 %%       {ok, Items::[string()], NextToken::string()} |
@@ -352,7 +358,7 @@ list_items(Domain) ->
 %%  
 list_items(Domain, Options) when is_list(Options) ->
     try genericRequest("Query", Domain, "", [], 
-		       [makeParam(X) || X <- Options]) of
+		       [makeParam(X) || X <- [{version, ?OLD_AWS_SDB_VERSION}|Options]]) of
 	{ok, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
 	    ItemNodes = xmerl_xpath:string("//ItemName/text()", XmlDoc),
@@ -379,7 +385,6 @@ list_items(Domain, Options) when is_list(Options) ->
 %%       Code::string() -> "InvalidParameterValue" | "InvalidNextToken" | "InvalidNumberPredicates"
 %%                       | "InvalidNumberValueTests" | "InvalidQueryExpression" | "InvalidSortExpression"
 %%                       | "MissingParameter" | "NoSuchDomain" | "RequestTimeout" | "TooManyRequestAttributes"
-
 select(SelectExp) ->
     select(SelectExp, []).
 
@@ -419,6 +424,9 @@ select(SelectExp, Options)  when is_list(Options) ->
 %% such a query spec is documented here:
 %% http://docs.amazonwebservices.com/AmazonSimpleDB/2007-11-07/DeveloperGuide/SDB_API_Query.html
 %%
+%% DEPRECATION WARNING: This function depends on deprecated operation "Query"
+%% which exists only on old SimpleDB API (version 2007-11-07).
+%%
 %% Spec: query_items(Domain::string(), QueryExp::string()]) ->
 %%       {ok, Items::[string()], []} |
 %%       {ok, Items::[string()], NextToken::string()} |
@@ -434,6 +442,9 @@ query_items(Domain, QueryExp) ->
 %% such a query spec is documented here:
 %% http://docs.amazonwebservices.com/AmazonSimpleDB/2007-11-07/DeveloperGuide/SDB_API_Query.html
 %%
+%% DEPRECATION WARNING: This function depends on deprecated operation "Query"
+%% which exists only on old SimpleDB API (version 2007-11-07).
+%%
 %% Spec: list_items(Domain::string(), QueryExp::string(), 
 %%                  Options::[{atom(), (integer() | string())}]) ->
 %%       {ok, Items::[string()], []} |
@@ -448,7 +459,7 @@ query_items(Domain, QueryExp) ->
 query_items(Domain, QueryExp, Options) when is_list(Options) ->
     {ok, Body} = genericRequest("Query", Domain, "", [], 
 				[{"QueryExpression", QueryExp}|
-				 [makeParam(X) || X <- Options]]),
+				 [makeParam(X) || X <- [{version, ?OLD_AWS_SDB_VERSION}|Options]]]),
     {XmlDoc, _Rest} = xmerl_scan:string(Body),
     ItemNodes = xmerl_xpath:string("//ItemName/text()", XmlDoc),
 	[#xmlText{value=RequestId}|_] =
@@ -490,17 +501,22 @@ genericRequest(Action, Domain, Item,
 				       Options),
 	SignParams = [{"AWSAccessKeyId", AWS_KEY},
 			{"Action", Action}, 
-			{"Version", ?AWS_SDB_VERSION},
 			{"SignatureVersion", "1"},
-			{"Timestamp", Timestamp}] ++ ActionQueryParams,
+			{"Timestamp", Timestamp}
+		     ] ++ case lists:keyfind("Version", 1, ActionQueryParams) of
+			      false ->
+				  [{"Version", ?AWS_SDB_VERSION}| ActionQueryParams];
+			      _ ->
+				  ActionQueryParams
+			  end,
 	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) -> 
 		{KeyA, _} = A,
 		{KeyB, _} = B,
 		string:to_lower(KeyA) =< string:to_lower(KeyB) end, 
 		SignParams)], ""),		
+
     Signature = sign(AWS_SEC_KEY, StringToSign),
     FinalQueryParams = SignParams ++ [{"Signature", Signature}],
-    io:format("~p~n", [FinalQueryParams]),
     Result = mkReq(FinalQueryParams),
     case Result of
 	{ok, _Status, Body} ->
@@ -544,7 +560,7 @@ getProtocol() ->
 mkReq(QueryParams) ->
     %io:format("QueryParams:~n ~p~n", [QueryParams]),
     Url = getProtocol() ++ ?AWS_SDB_HOST ++ "/" ++ erlaws_util:queryParams( QueryParams ),
-    io:format("RequestUrl:~n ~p~n", [Url]),
+    %io:format("RequestUrl:~n ~p~n", [Url]),
     Request = {Url, []},
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
@@ -625,6 +641,8 @@ makeParam(X) ->
 	    {"NextToken", NextToken};
 	{consistent_read, ConsistentRead} when is_boolean(ConsistentRead) ->
 	    {"ConsistentRead", case ConsistentRead of true -> "true"; false -> "false" end};
+	{version, Version} when is_list(Version) ->
+	    {"Version", Version};
 	_ -> {}
     end.
 
