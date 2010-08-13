@@ -61,6 +61,7 @@ Here a short overview:
   * list_domains/0
   * list_domains/1
   * put_attributes/3
+  * batch_put_attributes/2
   * delete_item/2
   * delete_attributes/3
   * get_attributes/2
@@ -73,6 +74,7 @@ Here a short overview:
   * select/2
 
 == erlaws_ec2 ==
+
   * start_instances/1 
   * run_instances/13 
   * stop_instances/2
