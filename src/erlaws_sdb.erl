@@ -11,13 +11,14 @@
 -export([create_domain/1, delete_domain/1, list_domains/0, list_domains/1,
 	 put_attributes/3, delete_item/2, delete_attributes/3,
 	 get_attributes/2, get_attributes/3, list_items/1, list_items/2, 
-	 query_items/2, query_items/3, storage_size/2]).
+	 query_items/2, query_items/3, select/1, select/2, storage_size/2]).
 
 %% include record definitions
 -include_lib("xmerl/include/xmerl.hrl").
 
 -define(AWS_SDB_HOST, "sdb.amazonaws.com").
--define(AWS_SDB_VERSION, "2007-11-07").
+%-define(AWS_SDB_VERSION, "2007-11-07").
+-define(AWS_SDB_VERSION, "2009-04-15").
 
 %% This function creates a new SimpleDB domain. The domain name must be unique among the 
 %% domains associated with your AWS Access Key ID. This function might take 10 
@@ -367,6 +368,53 @@ list_items(Domain, Options) when is_list(Options) ->
 	    {error, Descr}
     end.
 
+%% Executes the given select expression.
+%% http://docs.amazonwebservices.com/AmazonSimpleDB/2009-04-15/DeveloperGuide/index.html?SDB_API_Select.html
+%%
+%% Spec: select(SelectExp::string(),
+%%              Options::[{atom(), (integer() | string())}]) ->
+%%       {ok, Items::[{Item, Attribute::[{Name::string(), Values::[string()]}]}]} |
+%%       {error, {Code::string(), Msg::string(), ReqId::string()}}
+%%
+%%       Code::string() -> "InvalidParameterValue" | "InvalidNextToken" | "InvalidNumberPredicates"
+%%                       | "InvalidNumberValueTests" | "InvalidQueryExpression" | "InvalidSortExpression"
+%%                       | "MissingParameter" | "NoSuchDomain" | "RequestTimeout" | "TooManyRequestAttributes"
+
+select(SelectExp) ->
+    select(SelectExp, []).
+
+select(SelectExp, Options)  when is_list(Options) ->
+    try genericRequest("Select", "", "", [],
+		       [{"SelectExpression", SelectExp}|
+			[makeParam(X) || X <- Options]]) of
+	{ok, Body} ->
+	    {XmlDoc_, _Rest} = xmerl_scan:string(Body),
+	    ItemNodes = xmerl_xpath:string("//Item", XmlDoc_),
+	    F = fun(XmlDoc) ->
+			[#xmlText{value=Item}|_] = xmerl_xpath:string("//Name/text()", XmlDoc),
+			AttrList = [{KN, VN} || Node <- xmerl_xpath:string("//Attribute", XmlDoc),
+						begin
+						    [#xmlText{value=KeyRaw}|_] = 
+							xmerl_xpath:string("./Name/text()", Node),
+						    KN = case xmerl_xpath:string("./Name/@encoding", Node) of 
+							     [#xmlAttribute{value="base64"}|_] -> base64:decode(KeyRaw);
+							     _ -> KeyRaw end,
+						    ValueRaw = 
+							lists:flatten([ ValueR || #xmlText{value=ValueR} <- xmerl_xpath:string("./Value/text()", Node)]),
+						    VN = case xmerl_xpath:string("./Value/@encoding", Node) of 
+							     [#xmlAttribute{value="base64"}|_] -> base64:decode(ValueRaw);
+							     _ -> ValueRaw end,
+						    true
+						end],
+			{Item, lists:foldr(fun aggregateAttr/2, [], AttrList)}
+		end,
+	    Items = [F(ItemNode) || ItemNode <- ItemNodes],
+	    {ok, Items}
+    catch 
+	throw:{error, Descr} ->
+	    {error, Descr}
+    end.
+
 %% Executes the given query expression against a domain. The syntax for
 %% such a query spec is documented here:
 %% http://docs.amazonwebservices.com/AmazonSimpleDB/2007-11-07/DeveloperGuide/SDB_API_Query.html
@@ -406,6 +454,7 @@ query_items(Domain, QueryExp, Options) when is_list(Options) ->
 	[#xmlText{value=RequestId}|_] =
 		xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
     {ok, [Node#xmlText.value || Node <- ItemNodes], {requestId, RequestId}}.
+
 
 %% storage cost
 
@@ -451,6 +500,7 @@ genericRequest(Action, Domain, Item,
 		SignParams)], ""),		
     Signature = sign(AWS_SEC_KEY, StringToSign),
     FinalQueryParams = SignParams ++ [{"Signature", Signature}],
+    io:format("~p~n", [FinalQueryParams]),
     Result = mkReq(FinalQueryParams),
     case Result of
 	{ok, _Status, Body} ->
@@ -481,6 +531,8 @@ getQueryParams("DeleteAttributes", Domain, Item, Attributes, _Options) ->
 		buildAttributeParams(Attributes);
 	   true -> []
 	end;
+getQueryParams("Select", _Domain, _Item, _Attributes, Options) ->
+    Options;
 getQueryParams("Query", Domain, _Item, _Attributes, Options) ->
     [{"DomainName", Domain}] ++ Options.
 
@@ -492,7 +544,7 @@ getProtocol() ->
 mkReq(QueryParams) ->
     %io:format("QueryParams:~n ~p~n", [QueryParams]),
     Url = getProtocol() ++ ?AWS_SDB_HOST ++ "/" ++ erlaws_util:queryParams( QueryParams ),
-    %io:format("RequestUrl:~n ~p~n", [Url]),
+    io:format("RequestUrl:~n ~p~n", [Url]),
     Request = {Url, []},
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
@@ -571,6 +623,8 @@ makeParam(X) ->
 	    {"MaxNumberOfDomains", integer_to_list(MaxDomains)};
 	{next_token, NextToken} ->
 	    {"NextToken", NextToken};
+	{consistent_read, ConsistentRead} when is_boolean(ConsistentRead) ->
+	    {"ConsistentRead", case ConsistentRead of true -> "true"; false -> "false" end};
 	_ -> {}
     end.
 
