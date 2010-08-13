@@ -69,6 +69,8 @@ Here a short overview:
   * list_items/2 
   * query_items/2
   * query_items/3
+  * select/1
+  * select/2
 
 == erlaws_ec2 ==
   * start_instances/1 
