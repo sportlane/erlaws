@@ -9,7 +9,7 @@
 
 %% exports
 -export([create_domain/1, delete_domain/1, list_domains/0, list_domains/1,
-	 put_attributes/3, delete_item/2, delete_attributes/3,
+	 put_attributes/3, batch_put_attributes/2, delete_item/2, delete_attributes/3,
 	 get_attributes/2, get_attributes/3, list_items/1, list_items/2, 
 	 query_items/2, query_items/3, select/1, select/2, storage_size/2]).
 
@@ -133,6 +133,7 @@ list_domains(Options) ->
 %% - 256 total attribute name-value pairs per item
 %% - 250 million attributes per domain
 %% - 10 GB of total user data storage per domain
+%% - 1 billion attributes per domain
 %%
 %% Spec: put_attributes(Domain::string(), Item::string(), 
 %%                      Attributes::[{Name::string(), (Value::string() | Values:[string()])}]) |
@@ -180,6 +181,50 @@ delete_attributes(Domain, Item, Attributes) when is_list(Domain),
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 		{ok, {requestId, RequestId}}
 	catch 
+	throw:{error, Descr} ->
+	    {error, Descr}
+    end.
+
+%% Creates or replace multiple item attributes at once.
+%% You specify attributes using a list of tuples, each tuple formed as
+%% {"Item1", [{"Attr1", ["Value1"]}, {"Attr2", ["Value2", "Value3"]}]}.
+%%
+%% You may also use the Replace parameter as put_attributes, as
+%% {"Item1", [{"Attr1", "Value1"}, {"Attr2", ["Value2", "Value3", replace}]}.
+%%
+%% For API details, see:
+%% http://docs.amazonwebservices.com/AmazonSimpleDB/2009-04-15/DeveloperGuide/index.html?SDB_API_BatchPutAttributes.html
+%%
+%% Additional to the put_attributes limitation,
+%% following limitation are enforced.
+%% - 25 item limit per BatchPutAttribution operation
+%% - 1 MB request size
+%%
+%% Spec: batch_put_attributes(Domain::string(), 
+%%                            ItemAttributes::[{Item::string(),
+%%                                              Attributes::[{Name::string(), (Value::string() | Values:[string()])}])}] |
+%% Spec: batch_put_attributes(Domain::string(), 
+%%                            ItemAttributes::[{Name::string(), (Value::string() | Values:[string()]), 
+%%                                             Replace -> true}])}] ->
+%%
+%%       {ok, {requestId, RequestId::string()}} |
+%%       {error, {Code::string(), Msg::string(), ReqId::string()}}
+%%
+%%       Code::string() -> "DuplicateItemName" | "InvalidParameterValue" | "MissingParameter" |
+%%                         "NoSuchDomain" | "NumberItemAttributesExceeded" |
+%%                         "NumberDomainAttributesExceeded" | "NumberDomainBytesExceeded" |
+%%                         "NumberSubmittedItemsExceeded" | "NumberSubmittedAttrubutesExceeded"
+%%
+batch_put_attributes(Domain, ItemAttributes) when is_list(Domain),
+						  is_list(ItemAttributes) ->
+    try genericRequest("BatchPutAttributes", Domain, "", 
+		   ItemAttributes, []) of
+	{ok, Body} -> 
+		{XmlDoc, _Rest} = xmerl_scan:string(Body),
+		[#xmlText{value=RequestId}|_] =
+			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
+		{ok, {requestId, RequestId}}
+    catch 
 	throw:{error, Descr} ->
 	    {error, Descr}
     end.
@@ -535,6 +580,9 @@ getQueryParams("ListDomains", _Domain, _Item, _Attributes, Options) ->
 getQueryParams("PutAttributes", Domain, Item, Attributes, _Options) ->
     [{"DomainName", Domain}, {"ItemName", Item}] ++
 	buildAttributeParams(Attributes);
+getQueryParams("BatchPutAttributes", Domain, _Item, ItemAttributes, _Options) ->
+    [{"DomainName", Domain}| 
+	buildBatchAttributeParams(ItemAttributes)];
 getQueryParams("GetAttributes", Domain, Item, Attribute, _Options)  ->
     [{"DomainName", Domain}, {"ItemName", Item}] ++
 	if length(Attribute) > 0 ->
@@ -577,6 +625,25 @@ buildAttributeParams(Attributes) ->
     {_C, L} = lists:foldl(fun flattenParams/2, {0, []}, CAttr),
     %io:format("FlattenedList:~n ~p~n", [L]),
     lists:reverse(L).
+
+buildBatchAttributeParams(ItemAttributes) ->
+    BuildItemHdrFun =
+	fun(F, IAs, ItemNum, Acc) ->
+		ItemNumL = integer_to_list(ItemNum),
+		Lead = "Item." ++ ItemNumL ++ ".",
+		case IAs of
+		    [] -> Acc;
+		    [{Item, Attributes}|T] ->
+			F(F, T, ItemNum + 1,
+			  lists:foldl(fun({X, Y}, AccIn) ->
+					      [{Lead ++ X, Y}|AccIn]
+				      end,
+				      [],
+				      buildAttributeParams(Attributes))
+			  ++ [{Lead ++ "ItemName", Item}|Acc])
+		end
+	end,
+    lists:reverse(BuildItemHdrFun(BuildItemHdrFun, ItemAttributes, 0, [])).
 
 mkEntryName(Counter, Key) ->
     {"Attribute." ++ integer_to_list(Counter) ++ ".Name", Key}.
