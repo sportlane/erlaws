@@ -554,15 +554,26 @@ genericRequest(Action, Domain, Item,
 			      _ ->
 				  ActionQueryParams
 			  end,
-	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) -> 
-		{KeyA, _} = A,
-		{KeyB, _} = B,
-		string:to_lower(KeyA) =< string:to_lower(KeyB) end, 
-		SignParams)], ""),		
-
-    Signature = sign(AWS_SEC_KEY, StringToSign),
-    FinalQueryParams = SignParams ++ [{"Signature", Signature}],
-    Result = mkReq(FinalQueryParams),
+    Params =  [{"AWSAccessKeyId", AWS_KEY},
+			{"Action", Action}, 
+			{"Timestamp", Timestamp}
+	      ] ++ case lists:keyfind("Version", 1, ActionQueryParams) of
+		       false ->
+			   [{"Version", ?AWS_SDB_VERSION}| ActionQueryParams];
+		       _ ->
+			   ActionQueryParams
+		   end,
+%    Signature = mkSign2String(Sign2Params),
+%	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) -> 
+%		{KeyA, _} = A,
+%		{KeyB, _} = B,
+%		string:to_lower(KeyA) =< string:to_lower(KeyB) end, 
+%		SignParams)], ""),		
+%
+%    Signature = sign(AWS_SEC_KEY, StringToSign),
+%    FinalQueryParams = SignParams ++ [{"Signature", Signature}],
+%    FinalQueryParams = Sign2(?AWS_SEC_KEY, Params),
+    Result = mkReq(Params),
     case Result of
 	{ok, _Status, Body} ->
 	    {ok, Body};
@@ -605,14 +616,31 @@ getProtocol() ->
 		true -> "https://";
 		_ -> "http://" end.
 
-mkReq(QueryParams) ->
+mkReq(Params) ->
     %io:format("QueryParams:~n ~p~n", [QueryParams]),
-    Url = getProtocol() ++ ?AWS_SDB_HOST ++ "/" ++ erlaws_util:queryParams( QueryParams ),
+    QueryParams = [{"SignatureVersion", "2"}|[{"SignatureMethod", "HmacSHA1"}|Params]],
+    io:format("~p~n", [QueryParams]),
+    ParamsString = erlaws_util:mkEnumeration([ erlaws_util:url_encode(Key) ++ "=" ++ erlaws_util:url_encode(Value) ||
+						 {Key, Value} <- lists:keysort(1, QueryParams)],
+					     "&"),
+    StringToSign = "GET\n" ++ string:to_lower(?AWS_SDB_HOST) ++ "\n" ++ "/" ++ "\n" ++ ParamsString,
+    io:format("~s~n", [StringToSign]),
+    Signature = sign(AWS_SEC_KEY, StringToSign),
+    io:format("~s~n", [Signature]),
+    SignatureString = "&Signature=" ++ erlaws_util:url_encode(Signature),
+    %Url = getProtocol() ++ ?AWS_SDB_HOST ++ "/" ++ erlaws_util:queryParams( QueryParams ),    
+    Url = getProtocol() ++ ?AWS_SDB_HOST ++ "/?" ++ ParamsString ++ SignatureString,
+    %Url = getProtocol() ++ ?AWS_SDB_HOST ++ "/",
+    PostData = ParamsString ++ SignatureString,
+    io:format("~s~n", [Url]),
+    %io:format("GET ~s", [Url ++ "?" ++ PostData]),
     %io:format("RequestUrl:~n ~p~n", [Url]),
     Request = {Url, []},
+    %Request = {Url, [], "application/x-www-form-urlencoded", PostData},
     HttpOptions = [{autoredirect, true}],
-    Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
+    Options = [ {sync,true}, {headersp_as_is,true}, {body_format, binary} ],
     {ok, {Status, _ReplyHeaders, Body}} = 
+%	httpc:request(post, Request, HttpOptions, Options),
 	http:request(get, Request, HttpOptions, Options),
     %io:format("Response:~n ~p~n", [binary_to_list(Body)]),
     case Status of 
