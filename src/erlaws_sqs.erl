@@ -1,6 +1,7 @@
 %%-------------------------------------------------------------------
 %% @author Sascha Matzke <sascha.matzke@didolo.org>
 %% @doc This is an client implementation for Amazon's Simple Queue Service
+%% (This is a forked version by Kazuhiro Ogura <rgoura@karesansui-project.info>)
 %% @end
 %%%-------------------------------------------------------------------
 
@@ -19,6 +20,7 @@
 
 -define(AWS_SQS_HOST, "queue.amazonaws.com").
 -define(AWS_SQS_VERSION, "2008-01-01").
+-define(USE_SIGNATURE_V1, false).
 
 %% queues
 
@@ -322,45 +324,36 @@ query_request(Action, Parameters) ->
 	
 	query_request(Prefix ++ ?AWS_SQS_HOST ++ "/", Action, Parameters).
 
+query_request(Url, Action, Parameters) when ?USE_SIGNATURE_V1 ->
+    query_requestV1(Url, Action, Parameters);
 query_request(Url, Action, Parameters) ->
-	%% io:format("query_request: ~p ~p ~p~n", [Url, Action, Parameters]),
     Timestamp = lists:flatten(erlaws_util:get_timestamp()),
-	SignParams = [{"Action", Action}, {"AWSAccessKeyId", AWS_KEY}, {"Timestamp", Timestamp}] ++
-				 Parameters ++ [{"SignatureVersion", "1"}, {"Version", ?AWS_SQS_VERSION}],
-	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) -> 
-		{KeyA, _} = A,
-		{KeyB, _} = B,
-		string:to_lower(KeyA) =< string:to_lower(KeyB) end, 
-		SignParams)], ""),
-	%% io:format("StringToSign: ~p~n", [StringToSign]),
-    Signature = sign(AWS_SEC_KEY, StringToSign),
-	%% io:format("Signature: ~p~n", [Signature]),
-    FinalQueryParams = SignParams ++
-			[{"Signature", Signature}],
-    Result = mkReq(get, Url, [], FinalQueryParams, "", ""),
+    Params = [{"Action", Action}, {"AWSAccessKeyId", AWS_KEY}, {"Timestamp", Timestamp}]
+	++Parameters ++ [{"Version", ?AWS_SQS_VERSION}],
+    Result = mkReq(Url, Params),
     case Result of
 	{ok, _Status, Body} ->
 	    {ok, Body};
-	{error, {_Proto, Code, Reason}, Body} ->
+ 	{error, {_Proto, Code, Reason}, Body} ->
 	    throw({error, {integer_to_list(Code), Reason}, mkErr(Body)})
     end.
 
-mkReq(Method, PreUrl, Headers, QueryParams, ContentType, ReqBody) ->
-    %%%% io:format("QueryParams:~n ~p~nHeaders:~n ~p~nUrl:~n ~p~n", 
-    %%      [QueryParams, Headers, PreUrl]),
-    Url = PreUrl ++ erlaws_util:queryParams( QueryParams ),
-    %% io:format("RequestUrl:~n ~p~n", [Url]),
-    Request = case Method of
- 		  get -> { Url, Headers };
- 		  put -> { Url, Headers, ContentType, ReqBody }
- 	      end,
-
+mkReq(Url, Params) ->
+    QueryParams = [{"SignatureVersion", "2"}|[{"SignatureMethod", "HmacSHA1"}|Params]],
+    ParamsString = erlaws_util:mkEnumeration([ erlaws_util:url_encode(Key) ++ "=" ++ erlaws_util:url_encode(Value) ||
+						 {Key, Value} <- lists:keysort(1, QueryParams)],
+					     "&"),
+    {_, _, Host, _, _, _} = http_uri:parse(Url),
+    StringToSign = "POST\n" ++ string:to_lower(Host) ++ "\n" ++ "/" ++ "\n" ++ ParamsString,
+    Signature = sign(AWS_SEC_KEY, StringToSign),
+    SignatureString = "&Signature=" ++ erlaws_util:url_encode(Signature),
+    PostData = ParamsString ++ SignatureString,
+    %io:format("~s~n~s~n", [Url, PostData]),
+    Request = {Url, [], "application/x-www-form-urlencoded", PostData},
     HttpOptions = [{autoredirect, true}],
-    Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
-    {ok, {Status, _ReplyHeaders, Body}} = 
-	http:request(Method, Request, HttpOptions, Options),
-    %% io:format("Response:~n ~p~n", [binary_to_list(Body)]),
-	%% io:format("Status: ~p~n", [Status]),
+    Options = [{sync,true}, {body_format, binary}],
+    {ok, {Status, _ReplyHeaders, Body}} =
+	httpc:request(post, Request, HttpOptions, Options),
     case Status of 
 	{_, 200, _} -> {ok, Status, binary_to_list(Body)};
 	{_, _, _} -> {error, Status, binary_to_list(Body)}
@@ -384,3 +377,52 @@ mkErr(Xml) ->
 			end
 		end,
     {ErrorCode, ErrorMessage, {requestId, RequestId}}.
+
+
+%%% Erlang/OTP Releases before R14A can't handle Signature ver.2 + SSL request
+%%% implemented above (plain requests work fine). Signature ver.1 based code are
+%%% left below for compatibility.
+
+query_requestV1(Url, Action, Parameters) ->
+	%% io:format("query_request: ~p ~p ~p~n", [Url, Action, Parameters]),
+    Timestamp = lists:flatten(erlaws_util:get_timestamp()),
+	SignParams = [{"Action", Action}, {"AWSAccessKeyId", AWS_KEY}, {"Timestamp", Timestamp}] ++
+				 Parameters ++ [{"SignatureVersion", "1"}, {"Version", ?AWS_SQS_VERSION}],
+	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) -> 
+		{KeyA, _} = A,
+		{KeyB, _} = B,
+		string:to_lower(KeyA) =< string:to_lower(KeyB) end, 
+		SignParams)], ""),
+	%% io:format("StringToSign: ~p~n", [StringToSign]),
+    Signature = sign(AWS_SEC_KEY, StringToSign),
+	%% io:format("Signature: ~p~n", [Signature]),
+    FinalQueryParams = SignParams ++
+			[{"Signature", Signature}],
+    Result = mkReqV1(get, Url, [], FinalQueryParams, "", ""),
+    case Result of
+	{ok, _Status, Body} ->
+	    {ok, Body};
+	{error, {_Proto, Code, Reason}, Body} ->
+	    throw({error, {integer_to_list(Code), Reason}, mkErr(Body)})
+    end.
+
+mkReqV1(Method, PreUrl, Headers, QueryParams, ContentType, ReqBody) ->
+    %%%% io:format("QueryParams:~n ~p~nHeaders:~n ~p~nUrl:~n ~p~n", 
+    %%      [QueryParams, Headers, PreUrl]),
+    Url = PreUrl ++ erlaws_util:queryParams( QueryParams ),
+    %% io:format("RequestUrl:~n ~p~n", [Url]),
+    Request = case Method of
+ 		  get -> { Url, Headers };
+ 		  put -> { Url, Headers, ContentType, ReqBody }
+ 	      end,
+
+    HttpOptions = [{autoredirect, true}],
+    Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
+    {ok, {Status, _ReplyHeaders, Body}} = 
+	http:request(Method, Request, HttpOptions, Options),
+    %% io:format("Response:~n ~p~n", [binary_to_list(Body)]),
+	%% io:format("Status: ~p~n", [Status]),
+    case Status of 
+	{_, 200, _} -> {ok, Status, binary_to_list(Body)};
+	{_, _, _} -> {error, Status, binary_to_list(Body)}
+    end.
