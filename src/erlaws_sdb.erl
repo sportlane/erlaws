@@ -366,7 +366,6 @@ get_attributes(Domain, Item, Attribute) when is_list(Domain),
     end.
 
 
-
 %% Returns a list of all items of a domain - 100 at a time. If your
 %% domains contains more then 100 item you must use list_items/2 to
 %% retrieve all items.

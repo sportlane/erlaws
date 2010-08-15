@@ -190,7 +190,7 @@ put_object(Bucket, Key, Data, ContentType, Metadata) when is_integer(hd(ContentT
 %% EXAMPLE:
 %% S3 = ?MODULE:new(...),	% Fill it according to your preferences.
 %% S3:put_object("someBucket", "filename.js", <<"...">>, [{"Content-Type", "application/x-javascript; charset=\"utf-8\""},{"Cache-Control", "max-age=86400"},{"x-amz-acl", "public-read"}], [{"name", "metavalue"}]).
-%%
+%% S3:put_object("someBucket", "filename.mp4", <<"...">>, [{"Content-Type", "video/mp4"}, {"x-amz-storage-class", "REDUCED_REDUNDANCY"}], []).
 %%
 put_object(Bucket, Key, Data, HTTPHeaders, Metadata) ->
     try genericRequest(put, Bucket, Key, [], Metadata, HTTPHeaders, Data) of
@@ -252,7 +252,7 @@ get_object(Bucket, Key) ->
 %% Returns the metadata associated with the given key.
 %%
 %% Spec: info_object(Bucket::string(), Key::string()) ->
-%%       {ok, [{Key::string(), Value::string()},...]} |
+%%       {ok, [{Key::string(), Value::string()},...], {requestId, ReqId::string()}} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
 %%
 info_object(Bucket, Key) ->
