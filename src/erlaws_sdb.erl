@@ -2,6 +2,7 @@
 %% @author Sascha Matzke <sascha.matzke@didolo.org>
 %% @copyright 2007 Sascha Matzke
 %% @doc This is an client implementation for Amazon's SimpleDB WebService
+%% (This is a forked version by Kazuhiro Ogura <rgoura@karesansui-project.info>)
 %% @end
 %%%-------------------------------------------------------------------
 
@@ -19,6 +20,7 @@
 -define(AWS_SDB_HOST, "sdb.amazonaws.com").
 -define(OLD_AWS_SDB_VERSION, "2007-11-07").
 -define(AWS_SDB_VERSION, "2009-04-15").
+-define(USE_SIGNATURE_V1, false).
 
 %% This function creates a new SimpleDB domain. The domain name must be unique among the 
 %% domains associated with your AWS Access Key ID. This function might take 10 
@@ -539,6 +541,9 @@ sign (Key,Data) ->
     %io:format("StringToSign:~n ~p~n", [Data]),
     binary_to_list( base64:encode( crypto:sha_mac(Key,Data) ) ).
 
+genericRequest(Action, Domain, Item,
+	       Attributes, Options) when ?USE_SIGNATURE_V1 ->
+    genericRequestV1(Action, Domain, Item, Attributes, Options);
 genericRequest(Action, Domain, Item, 
 	       Attributes, Options) ->
     Timestamp = lists:flatten(erlaws_util:get_timestamp()),
@@ -561,6 +566,7 @@ genericRequest(Action, Domain, Item,
 	    %throw({error, {integer_to_list(Code), Reason}, mkErr(Body)})
 	    throw({error, mkErr(Body)})
     end.
+
 
 getQueryParams("CreateDomain", Domain, _Item, _Attributes, _Options) ->
     [{"DomainName", Domain}];
@@ -610,10 +616,9 @@ mkReq(Params) ->
     %io:format("~s~n~s~n", [Url, PostData]),
     Request = {Url, [], "application/x-www-form-urlencoded", PostData},
     HttpOptions = [{autoredirect, true}],
-    Options = [ {sync,true}, {headersp_as_is,true}, {body_format, binary} ],
-    {ok, {Status, _ReplyHeaders, Body}} = 
+    Options = [{sync,true}, {body_format, binary}],
+    {ok, {Status, _ReplyHeaders, Body}} =
 	httpc:request(post, Request, HttpOptions, Options),
-    %io:format("Response:~n ~p~n", [binary_to_list(Body)]),
     case Status of 
 	{_, 200, _} -> {ok, Status, binary_to_list(Body)};
 	{_, _, _} -> {error, Status, binary_to_list(Body)}
@@ -722,3 +727,55 @@ mkErr(Xml) ->
     [#xmlText{value=ErrorMessage}|_] = xmerl_xpath:string("//Error/Message/text()", XmlDoc),
     [#xmlText{value=RequestId}|_] = xmerl_xpath:string("//RequestID/text()", XmlDoc),
     {ErrorCode, ErrorMessage, RequestId}.
+
+
+%%% Erlang/OTP Releases before R14A can't handle Signature ver.2 + SSL request
+%%% implemented above (plain requests work fine). Signature ver.1 based code are
+%%% left below for compatibility.
+
+genericRequestV1(Action, Domain, Item, 
+	       Attributes, Options) ->
+    Timestamp = lists:flatten(erlaws_util:get_timestamp()),
+    ActionQueryParams = getQueryParams(Action, Domain, Item, Attributes, 
+				       Options),
+	SignParams = [{"AWSAccessKeyId", AWS_KEY},
+			{"Action", Action}, 
+			{"SignatureVersion", "1"},
+			{"Timestamp", Timestamp}
+		     ] ++ case lists:keyfind("Version", 1, ActionQueryParams) of
+			      false ->
+				  [{"Version", ?AWS_SDB_VERSION}| ActionQueryParams];
+			      _ ->
+				  ActionQueryParams
+			  end,
+	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) -> 
+		{KeyA, _} = A,
+		{KeyB, _} = B,
+		string:to_lower(KeyA) =< string:to_lower(KeyB) end, 
+		SignParams)], ""),		
+
+    Signature = sign(AWS_SEC_KEY, StringToSign),
+    FinalQueryParams = SignParams ++ [{"Signature", Signature}],
+    Result = mkReqV1(FinalQueryParams),
+    case Result of
+	{ok, _Status, Body} ->
+	    {ok, Body};
+	{error, {_Proto, _Code, _Reason}, Body} ->
+	    %throw({error, {integer_to_list(Code), Reason}, mkErr(Body)})
+	    throw({error, mkErr(Body)})
+    end.
+
+mkReqV1(QueryParams) ->
+    %io:format("QueryParams:~n ~p~n", [QueryParams]),
+    Url = getProtocol() ++ ?AWS_SDB_HOST ++ "/" ++ erlaws_util:queryParams( QueryParams ),
+    %io:format("RequestUrl:~n ~p~n", [Url]),
+    Request = {Url, []},
+    HttpOptions = [{autoredirect, true}],
+    Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
+    {ok, {Status, _ReplyHeaders, Body}} = 
+	http:request(get, Request, HttpOptions, Options),
+    %io:format("Response:~n ~p~n", [binary_to_list(Body)]),
+    case Status of 
+	{_, 200, _} -> {ok, Status, binary_to_list(Body)};
+	{_, _, _} -> {error, Status, binary_to_list(Body)}
+    end.
