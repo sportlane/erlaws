@@ -61,6 +61,7 @@ url_encode_char([X | T], Acc) when X >= $A, X =< $Z ->
     url_encode_char(T, [X | Acc]);
 url_encode_char([X | T], Acc) when X == $-; X == $_; X == $. ->
     url_encode_char(T, [X | Acc]);
+% Commented out to strictly comply with AWS requirement -- goura
 %url_encode_char([32 | T], Acc) ->
 %    url_encode_char(T, [$+ | Acc]);
 url_encode_char([X | T], Acc) ->
@@ -69,5 +70,6 @@ url_encode_char([X | T], Acc) ->
 			       Acc.
 
 d2h(N) when N<10 -> N+$0;
+% Commented out to strictly comply with AWS requirement -- goura
 %d2h(N) -> N+$a-10.
 d2h(N) -> N+$A-10.
