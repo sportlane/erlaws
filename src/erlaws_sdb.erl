@@ -428,6 +428,8 @@ list_items(Domain, Options) when is_list(Options) ->
 %%       {ok, Items::[{Item, Attribute::[{Name::string(), Values::[string()]}]}]} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
 %%
+%%       Options -> [{next_token, string()}]
+%%
 %%       Code::string() -> "InvalidParameterValue" | "InvalidNextToken" | "InvalidNumberPredicates"
 %%                       | "InvalidNumberValueTests" | "InvalidQueryExpression" | "InvalidSortExpression"
 %%                       | "MissingParameter" | "NoSuchDomain" | "RequestTimeout" | "TooManyRequestAttributes"
@@ -441,6 +443,10 @@ select(SelectExp, Options)  when is_list(Options) ->
 	{ok, Body} ->
 	    {XmlDoc_, _Rest} = xmerl_scan:string(Body),
 	    ItemNodes = xmerl_xpath:string("//Item", XmlDoc_),
+	    NextToken = case xmerl_xpath:string("//NextToken/text()", XmlDoc_) of
+			    [] -> "";
+			    [#xmlText{value=NT}|_] -> NT
+			end,
 	    F = fun(XmlDoc) ->
 			[#xmlText{value=Item}|_] = xmerl_xpath:string("//Name/text()", XmlDoc),
 			AttrList = [{KN, VN} || Node <- xmerl_xpath:string("//Attribute", XmlDoc),
@@ -460,7 +466,7 @@ select(SelectExp, Options)  when is_list(Options) ->
 			{Item, lists:foldr(fun aggregateAttr/2, [], AttrList)}
 		end,
 	    Items = [F(ItemNode) || ItemNode <- ItemNodes],
-	    {ok, Items}
+	    {ok, Items, NextToken}
     catch 
 	throw:{error, Descr} ->
 	    {error, Descr}
