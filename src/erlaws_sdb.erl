@@ -425,14 +425,16 @@ list_items(Domain, Options) when is_list(Options) ->
 %%
 %% Spec: select(SelectExp::string(),
 %%              Options::[{atom(), (integer() | string())}]) ->
-%%       {ok, Items::[{Item, Attribute::[{Name::string(), Values::[string()]}]}]} |
-%%       {error, {Code::string(), Msg::string(), ReqId::string()}}
+%%     {ok, Items::[{Item, Attribute::[{Name::string(), Values::[string()]}]}], []} |
+%%     {ok, Items::[{Item, Attribute::[{Name::string(), Values::[string()]}]}], NextToken:string()}
 %%
-%%       Options -> [{next_token, string()}]
+%%     {error, {Code::string(), Msg::string(), ReqId::string()}}
 %%
-%%       Code::string() -> "InvalidParameterValue" | "InvalidNextToken" | "InvalidNumberPredicates"
-%%                       | "InvalidNumberValueTests" | "InvalidQueryExpression" | "InvalidSortExpression"
-%%                       | "MissingParameter" | "NoSuchDomain" | "RequestTimeout" | "TooManyRequestAttributes"
+%%     Options -> [{next_token, string()}]
+%%
+%%     Code::string() -> "InvalidParameterValue" | "InvalidNextToken" | "InvalidNumberPredicates"
+%%                     | "InvalidNumberValueTests" | "InvalidQueryExpression" | "InvalidSortExpression"
+%%                     | "MissingParameter" | "NoSuchDomain" | "RequestTimeout" | "TooManyRequestAttributes"
 select(SelectExp) ->
     select(SelectExp, []).
 
