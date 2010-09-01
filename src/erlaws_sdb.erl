@@ -12,7 +12,8 @@
 -export([create_domain/1, delete_domain/1, list_domains/0, list_domains/1,
 	 put_attributes/3, put_attributes/4, batch_put_attributes/2,
 	 delete_item/2, delete_attributes/3, delete_attributes/4,
-	 get_attributes/2, get_attributes/3, list_items/1, list_items/2, 
+	 get_attributes/2, get_attributes/3, get_attributes/4,
+	 list_items/1, list_items/2, 
 	 query_items/2, query_items/3, select/1, select/2, storage_size/2]).
 
 %% include record definitions
@@ -331,12 +332,18 @@ get_attributes(Domain, Item) when is_list(Domain),
 %%
 get_attributes(Domain, Items, Attribute) when is_list(Domain),
 					      is_list(Items), 
-					      is_list(hd(Items)),
 					      is_list(Attribute) ->
+    get_attributes(Domain, Items, Attribute, []).
+
+get_attributes(Domain, Items, Attribute, Options) when is_list(Domain),
+						       is_list(Items), 
+						       is_list(hd(Items)),
+						       is_list(Attribute),
+						       is_list(Options) ->
     Fetch = fun(X) -> 
 		    ParentPID = self(), 
 		    spawn(fun() ->
-				  case get_attributes(Domain, X, Attribute) of
+				  case get_attributes(Domain, X, Attribute, Options) of
 				      {ok, [ItemResult]} ->
 					  ParentPID ! { ok, ItemResult };
 				      {error, Descr} -> 
@@ -367,11 +374,12 @@ get_attributes(Domain, Items, Attribute) when is_list(Domain),
 %%
 %%       Code::string() -> "InvalidParameterValue" | "MissingParameter" | "NoSuchDomain"
 %%
-get_attributes(Domain, Item, Attribute) when is_list(Domain),
-					     is_list(Item),
-					     is_list(Attribute) ->
+get_attributes(Domain, Item, Attribute, Options) when is_list(Domain),
+						      is_list(Item),
+						      is_list(Attribute),
+						      is_list(Options) ->
     try genericRequest("GetAttributes", Domain, Item,
-		       Attribute, []) of
+		       Attribute, [makeParam(X) || X <- Options]) of
 	{ok, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
 	    AttrList = [{KN, VN} || Node <- xmerl_xpath:string("//Attribute", XmlDoc),
@@ -617,8 +625,8 @@ getQueryParams("PutAttributes", Domain, Item, Attributes, Options) ->
 getQueryParams("BatchPutAttributes", Domain, _Item, ItemAttributes, _Options) ->
     [{"DomainName", Domain}| 
 	buildBatchAttributeParams(ItemAttributes)];
-getQueryParams("GetAttributes", Domain, Item, Attribute, _Options)  ->
-    [{"DomainName", Domain}, {"ItemName", Item}] ++
+getQueryParams("GetAttributes", Domain, Item, Attribute, Options)  ->
+    Options ++ [{"DomainName", Domain}, {"ItemName", Item}] ++
 	if length(Attribute) > 0 ->
 		[{"AttributeName", Attribute}];
 	   true -> []
