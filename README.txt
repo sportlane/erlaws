@@ -81,3 +81,100 @@ Here a short overview:
   * terminate_instances/1
   * describe_instances/0
   * describe_instances/1
+
+== SimpleDB Intro ==
+> inets:start().
+ok
+> ssl:start().
+ok
+> SDB = erlaws_sdb:new("<your aws access key>", "<your aws secret key">).
+{erlaws_sdb,"<your aws access key>",
+            "<your aws secret key>",true}
+
+% To create a new domain
+> SDB:create_domain("my_domain").
+{ok,{requestId,"<request id here>"}}
+
+% Create a new item in our new domain,
+% which has name "item1", with one attribute named "surname",
+% with one value "Suzuki".
+> SDB:put_attributes("my_domain", "item1", [{"surname", ["Suzuki"]}]).
+{ok,{requestId,"<request id here>"}}
+
+% Create another attribute "givenname" within "Ichiro"
+> SDB:put_attributes("my_domain", "item1", [{"givenname", ["Ichiro"]}]).
+
+% Now item1 looks like this
+> SDB:get_attributes("my_domain", "item1").
+{ok,[{"item1",
+      [{"givenname",["Ichiro"]},{"surname",["Suzuki"]}]}]}
+
+% Add another item named "item2"
+> SDB:put_attributes("my_domain", "item2", [{"surname", ["Asada"]}, {"givenname", ["Mao"}]).
+{ok,{requestId,"<request id here>"}}
+
+% Use select/1 for select queries.
+> SDB:select("select * from my_domain").
+{ok,[{"item1",
+      [{"surname",["Suzuki"]},{"givenname",["Ichiro"]}]},
+     {"item2",[{"surname",["Asada"]},{"givenname",["Mao"]}]}],
+    []}
+
+
+== SQS Intro ==
+> inets:start().
+ok
+> ssl:start().
+ok
+> SQS = erlaws_sqs:new("<your aws access key>", "<your aws secret key">).
+{erlaws_sqs,"<your aws access key>",
+            "<your aws secret key>",true}
+> rr(erlaws_sqs).
+[s3_list_result,s3_object_info,sqs_message,sqs_queue,
+ xmerl_event,xmerl_fun_states,xmerl_scanner,xmlAttribute,
+ xmlComment,xmlContext,xmlDecl,xmlDocument,xmlElement,
+ xmlNamespace,xmlNode,xmlNsNode,xmlObj,xmlPI,xmlText]
+
+% Create a new queue.
+> SQS:create_queue("my_queue")
+{ok,"https://queue.amazonaws.com/my_queue",
+    {requestId,"<request id here>"}}
+
+% Send a message
+> SQS:send_message("https://queue.amazonaws.com/my_queue", "hello").
+{ok,#sqs_message{messageId = "<message id here>",
+                 receiptHandle = [],
+                 contentMD5 = "<md5 sum here>",
+                 body = "hello"},
+    {requestId,"<request id here>"}}
+
+% Receive messages
+> SQS:receive_message("https://queue.amazonaws.com/my_queue").
+{ok,[#sqs_message{messageId = "<message id here>",
+                  receiptHandle = "<some long receipt handle>",
+                  contentMD5 = "<md5 sum here>",
+                  body = "hello"}],
+    {requestId,"<request id here>"}}
+
+% Following immediate receive will return nothing.
+> SQS:receive_message("https://queue.amazonaws.com/my_queue").
+{ok,[],{requestId,"<request id here>"}}
+
+% After some 30 seconds you can receive "hello" again.
+> SQS:receive_message("https://queue.amazonaws.com/my_queue").
+{ok,[#sqs_message{messageId = "<message id here>",
+                  receiptHandle = "<some long receipt handle>",
+                  contentMD5 = "<md5 sum here>",
+                  body = "hello"}],
+    {requestId,"<request id here>"}}
+
+% Visibility timeout is defined in queue attributes.
+> SQS:get_queue_attr("https://queue.amazonaws.com/my_queue").
+{ok,[{"VisibilityTimeout",30},
+     {"ApproximateNumberOfMessages",0}],
+    {requestId,"<request id here>"}}
+
+% To delete message from queue, use the "receiptHandle",
+% which is a unique identifier for each item in the queue.
+> SQS:delete_message("https://queue.amazonaws.com/my_queue", "<some long receipt handle>").
+{ok,{requestId,"<request id here>"}}
