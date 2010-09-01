@@ -10,7 +10,8 @@
 
 %% exports
 -export([create_domain/1, delete_domain/1, list_domains/0, list_domains/1,
-	 put_attributes/3, batch_put_attributes/2, delete_item/2, delete_attributes/3,
+	 put_attributes/3, put_attributes/4, batch_put_attributes/2,
+	 delete_item/2, delete_attributes/3, delete_attributes/4,
 	 get_attributes/2, get_attributes/3, list_items/1, list_items/2, 
 	 query_items/2, query_items/3, select/1, select/2, storage_size/2]).
 
@@ -152,8 +153,22 @@ list_domains(Options) ->
 put_attributes(Domain, Item, Attributes) when is_list(Domain),
 					      is_list(Item),
 					      is_list(Attributes) ->
+    put_attributes(Domain, Item, Attributes, []).
+
+%% You may request "conditional put" by providing the 4th argument to
+%% put_attributes/4.
+%% For example, if you expect AttributeName to be AttribueValue,
+%% provide [{expected, AttributeName, AttributeValue}], and if 
+%% you expect [AttributeName] not to exist, provide
+%% [{expected, AttributeName, false}].
+%%
+%% See: http://developer.amazonwebservices.com/connect/entry.jspa?externalID=3572
+put_attributes(Domain, Item, Attributes, Options) when is_list(Domain),
+					      is_list(Item),
+					      is_list(Attributes),
+					      is_list(Options) ->
     try genericRequest("PutAttributes", Domain, Item, 
-		   Attributes, []) of
+		   Attributes, [makeParam(X) || X <- Options]) of
 	{ok, Body} -> 
 		{XmlDoc, _Rest} = xmerl_scan:string(Body),
 		[#xmlText{value=RequestId}|_] =
@@ -175,14 +190,28 @@ put_attributes(Domain, Item, Attributes) when is_list(Domain),
 delete_attributes(Domain, Item, Attributes) when is_list(Domain),
 						 is_list(Item),
 						 is_list(Attributes) ->
+    delete_attributes(Domain, Item, Attributes, []).
+
+%% You may request "conditional delete" by providing the 4th argument to
+%% put_attributes/4.
+%% For example, if you expect AttributeName to be AttribueValue,
+%% provide [{expected, AttributeName, AttributeValue}], and if 
+%% you expect [AttributeName] not to exist, provide
+%% [{expected, AttributeName, false}].
+%%
+%% See: http://developer.amazonwebservices.com/connect/entry.jspa?externalID=3572
+delete_attributes(Domain, Item, Attributes, Options) when is_list(Domain),
+							  is_list(Item),
+							  is_list(Attributes),
+							  is_list(Options) ->
     try genericRequest("DeleteAttributes", Domain, Item,
-		   Attributes, []) of
+		       Attributes, [makeParam(X) || X <- Options]) of
 	{ok, Body} -> 
-		{XmlDoc, _Rest} = xmerl_scan:string(Body),
-		[#xmlText{value=RequestId}|_] =
-			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
-		{ok, {requestId, RequestId}}
-	catch 
+	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
+	    [#xmlText{value=RequestId}|_] =
+		xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
+	    {ok, {requestId, RequestId}}
+    catch 
 	throw:{error, Descr} ->
 	    {error, Descr}
     end.
@@ -553,9 +582,10 @@ genericRequest(Action, Domain, Item,
     genericRequestV1(Action, Domain, Item, Attributes, Options);
 genericRequest(Action, Domain, Item, 
 	       Attributes, Options) ->
+    io:format("Options: ~p~n", [Options]),
     Timestamp = lists:flatten(erlaws_util:get_timestamp()),
     ActionQueryParams = getQueryParams(Action, Domain, Item, Attributes, 
-				       Options),
+				       lists:flatten(Options)),
     Params =  [{"AWSAccessKeyId", AWS_KEY},
 			{"Action", Action}, 
 			{"Timestamp", Timestamp}
@@ -581,8 +611,8 @@ getQueryParams("DeleteDomain", Domain, _Item, _Attributes, _Options) ->
     [{"DomainName", Domain}];
 getQueryParams("ListDomains", _Domain, _Item, _Attributes, Options) ->
     Options;
-getQueryParams("PutAttributes", Domain, Item, Attributes, _Options) ->
-    [{"DomainName", Domain}, {"ItemName", Item}] ++
+getQueryParams("PutAttributes", Domain, Item, Attributes, Options) ->
+    Options ++ [{"DomainName", Domain}, {"ItemName", Item}] ++
 	buildAttributeParams(Attributes);
 getQueryParams("BatchPutAttributes", Domain, _Item, ItemAttributes, _Options) ->
     [{"DomainName", Domain}| 
@@ -593,8 +623,8 @@ getQueryParams("GetAttributes", Domain, Item, Attribute, _Options)  ->
 		[{"AttributeName", Attribute}];
 	   true -> []
 	end;
-getQueryParams("DeleteAttributes", Domain, Item, Attributes, _Options) ->
-    [{"DomainName", Domain}, {"ItemName", Item}] ++
+getQueryParams("DeleteAttributes", Domain, Item, Attributes, Options) ->
+   Options ++ [{"DomainName", Domain}, {"ItemName", Item}] ++
 	if length(Attributes) > 0 -> 
 		buildAttributeParams(Attributes);
 	   true -> []
@@ -719,6 +749,12 @@ makeParam(X) ->
 	    {"NextToken", NextToken};
 	{consistent_read, ConsistentRead} when is_boolean(ConsistentRead) ->
 	    {"ConsistentRead", case ConsistentRead of true -> "true"; false -> "false" end};
+	{expected, Name, Exists} when is_list(Name), is_boolean(Exists) ->
+	    [{"Expected.1.Name", Name},
+	     {"Expected.1.Exists", case Exists of true -> "true"; false -> "false" end}];
+	{expected, Name, Value} when is_list(Name), is_list(Value) ->
+	    [{"Expected.1.Name", Name},
+	     {"Expected.1.Value", Value}];
 	{version, Version} when is_list(Version) ->
 	    {"Version", Version};
 	_ -> {}
@@ -744,7 +780,7 @@ genericRequestV1(Action, Domain, Item,
 	       Attributes, Options) ->
     Timestamp = lists:flatten(erlaws_util:get_timestamp()),
     ActionQueryParams = getQueryParams(Action, Domain, Item, Attributes, 
-				       Options),
+				       lists:flatten(Options)),
 	SignParams = [{"AWSAccessKeyId", AWS_KEY},
 			{"Action", Action}, 
 			{"SignatureVersion", "1"},
