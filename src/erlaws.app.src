@@ -1,0 +1,20 @@
+{application, erlaws,
+ [
+  {description, "AWS api"},
+  {vsn, "0.0.1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+		  crypto,
+		  inets
+                 ]},
+  {mod, { erlaws, [
+		   erlaws_ec2,
+		   erlaws_s3,
+		   erlaws_sdb,
+		   erlaws_sqs,
+		   erlaws_util
+		  ]}},
+  {env, []}
+ ]}.

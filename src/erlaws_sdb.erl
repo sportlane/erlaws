@@ -496,7 +496,7 @@ mkReq(QueryParams) ->
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
     {ok, {Status, _ReplyHeaders, Body}} = 
-	http:request(get, Request, HttpOptions, Options),
+	httpc:request(get, Request, HttpOptions, Options),
     %io:format("Response:~n ~p~n", [binary_to_list(Body)]),
     case Status of 
 	{_, 200, _} -> {ok, Status, binary_to_list(Body)};
