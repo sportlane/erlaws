@@ -12,6 +12,7 @@
 -export([list_buckets/0, create_bucket/1, create_bucket/2, delete_bucket/1]).
 -export([list_contents/1, list_contents/2, put_object/5, put_file/5, get_object/2]).
 -export([info_object/2, delete_object/2]).
+-export([initiate_mp_upload/4, complete_mp_upload/4, abort_mp_upload/3, upload_part/6]).
 
 %% include record definitions
 -include_lib("xmerl/include/xmerl.hrl").
@@ -195,10 +196,90 @@ put_object(Bucket, Key, Data, ContentType, Metadata) when is_integer(hd(ContentT
 put_object(Bucket, Key, Data, HTTPHeaders, Metadata) ->
     try genericRequest(put, Bucket, Key, [], Metadata, HTTPHeaders, Data) of
 	{ok, Headers, _Body} -> 
-	    RequestId = case lists:keytake(?S3_REQ_ID_HEADER, 1, Headers) of
-			{value, {_, ReqId}, _} -> ReqId;
-			_ -> "" end,
-		{ok, #s3_object_info{key=Key, size=size(Data)}, {requestId, RequestId}}
+	    {ok,
+	     #s3_object_info{key=Key, size=iolist_size(Data),
+			     etag=proplists:get_value("etag", Headers)},
+	     {requestId, proplists:get_value(?S3_REQ_ID_HEADER, Headers, "")}}
+    catch
+	throw:{error, Descr} ->
+	    {error, Descr}
+    end.
+
+%% @doc
+%% Initiates multipart upload.
+%% @end
+-spec initiate_mp_upload(Bucket::string(), Key::string(),
+			 HTTPHeaders::[{string(), string()}],
+			 Metadata::[{string(), string()}]) ->
+			    {ok, UploadId::string(), ReqId::string()}.
+initiate_mp_upload(Bucket, Key, HTTPHeaders, Metadata) ->
+    try genericRequest(post, Bucket, Key, [{"uploads", ""}],
+		       Metadata, HTTPHeaders, <<>>) of
+	{ok, Headers, Body} ->
+	    {XmlDoc, _Rest} = xmerl_scan:string(binary_to_list(Body)),
+	    [_XBucket|_] = xmerl_xpath:string("/InitiateMultipartUploadResult/Bucket/text()", XmlDoc),
+	    [_XKey|_] = xmerl_xpath:string("/InitiateMultipartUploadResult/Key/text()", XmlDoc),
+	    [XUploadId|_] = xmerl_xpath:string("/InitiateMultipartUploadResult/UploadId/text()", XmlDoc),
+	    {ok, XUploadId#xmlText.value, proplists:get_value(?S3_REQ_ID_HEADER, Headers, "")}
+    catch
+	throw:{error, Descr} ->
+	    {error, Descr}
+    end.
+
+%% @doc
+%% Completes multipart upload.
+%% @end
+-spec complete_mp_upload(Bucket::string(), Key::string(), UploadId::string(),
+			 [{PartNum::integer(), ETag::string()}]) -> ok.
+complete_mp_upload(Bucket, Key, UploadId, Parts) ->
+    F = fun({PartNum, ETag}) ->
+		{'Part', [],
+		 [
+		  {'PartNumber', [integer_to_list(PartNum)]},
+		  {'ETag', [ETag]}
+		 ]
+		}
+	end,
+    Req = {'CompleteMultipartUpload', [], [F(X) || X <- Parts]},
+    XMLReqBody = xmerl:export_simple([Req], xmerl_xml),
+    try genericRequest(post, Bucket, Key,
+		       [{"uploadId", UploadId}], [], [], XMLReqBody) of
+	{ok, _Headers, _Body} -> ok
+    catch
+	throw:{error, Descr} ->
+	    {error, Descr}
+    end.
+
+%% @doc
+%% Aborts multipart upload.
+%% @end
+-spec abort_mp_upload(Bucket::string(), Key::string(), UploadId::string()) ->
+			      ok.
+abort_mp_upload(Bucket, Key, UploadId) ->
+    try genericRequest(delete, Bucket, Key,
+		       [{"uploadId", UploadId}], [], [], <<>>) of
+	{ok, _Headers, _Body} -> ok
+    catch
+	throw:{error, Descr} ->
+	    {error, Descr}
+    end.
+
+%% @doc
+%% Uploads a part in multipart upload.
+%% @end
+-spec upload_part(Bucket::string(), Key::string(), PartNum::integer(),
+		  UploadId::string(), Data::binary(),
+		  HTTPHeaders::[{string(), string()}]) -> ok.
+upload_part(Bucket, Key, PartNum, UploadId, Data, HTTPHeaders) ->
+    try genericRequest(put, Bucket, Key,
+		       [{"partNumber", integer_to_list(PartNum)},
+			{"uploadId", UploadId}],
+		       [], HTTPHeaders, Data) of
+	{ok, Headers, _Body} ->
+	    {ok,
+	     #s3_object_info{key=Key, size=iolist_size(Data),
+			     etag=proplists:get_value("etag", Headers)},
+	     {requestId, proplists:get_value(?S3_REQ_ID_HEADER, Headers, "")}}
     catch
 	throw:{error, Descr} ->
 	    {error, Descr}
