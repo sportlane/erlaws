@@ -15,8 +15,17 @@ mkEnumeration(Values, Separator) ->
 
 queryParams( [] ) -> "";
 queryParams( ParamList ) -> 
-    "?" ++ mkEnumeration([[url_encode(Param), "=", url_encode(Value)]
-			  || {Param, Value} <- ParamList], "&" ).
+    L0 = lists:foldl(fun({P, V}, Acc) ->
+			     case V of
+				 "" ->
+				     [url_encode(P)|Acc];
+				 _ ->
+				     [url_encode(P) ++ "=" ++ url_encode(V)|Acc]
+			     end
+		     end,
+		     [],
+		     lists:keysort(1, ParamList)),
+    "?" ++ mkEnumeration(lists:reverse(L0), "&"). 
 
 %% The following code is taken from the ibrowse Http client
 %% library.
