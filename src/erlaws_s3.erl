@@ -354,10 +354,10 @@ buildContentHeaders(Contents) when is_integer(Contents) ->
     [{"Content-Length", integer_to_list(Contents)}];
 % Detect gzip header and put appropriate Content-Encoding. Questionable?..
 buildContentHeaders(<<16#1f, 16#8b, _/binary>> = Contents) -> 
-    [{"Content-Length", integer_to_list(size(Contents))},
+    [{"Content-Length", integer_to_list(iolist_size(Contents))},
      {"Content-Encoding", "gzip"}];
 buildContentHeaders(Contents) -> 
-    [{"Content-Length", integer_to_list(size(Contents))}].
+    [{"Content-Length", integer_to_list(iolist_size(Contents))}].
 
 buildMetadataHeaders(Metadata) ->
     lists:foldl(fun({Key, Value}, Acc) ->
@@ -391,8 +391,8 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
     MethodString = string:to_upper( atom_to_list(Method) ),
     Url = buildUrl(Bucket,Path,QueryParams),
 
-    ContentMD5 = case Body of
-		     <<>> -> "";
+    ContentMD5 = case iolist_size(Body) of
+		     0 -> "";
 		     _ -> binary_to_list(base64:encode(erlang:md5(Body)))
 		 end,
     
