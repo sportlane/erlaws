@@ -425,6 +425,7 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
  		  get -> { Url, FinalHeaders };
 		  head -> { Url, FinalHeaders };
  		  put -> { Url, FinalHeaders, ContentType, Body };
+ 		  post -> { Url, FinalHeaders, ContentType, Body };
  		  delete -> { Url, FinalHeaders }
  	      end,
 
