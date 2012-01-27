@@ -160,7 +160,7 @@ mkReq(Method, PreUrl, Headers, QueryParams, ContentType, ReqBody) ->
 
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
-    {ok, {Status, _ReplyHeaders, Body}} = http:request(Method, Request, HttpOptions, Options),
+    {ok, {Status, _ReplyHeaders, Body}} = httpc:request(Method, Request, HttpOptions, Options),
     case Status of 
 		{_, 200, _} -> {ok, Status, binary_to_list(Body)};
 		{_, _, _} -> {error, Status, binary_to_list(Body)}
