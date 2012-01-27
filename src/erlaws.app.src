@@ -1,0 +1,8 @@
+{application, erlaws, [
+    {description, "erlaws"},
+    {vsn, "0.2"},
+    {modules, []}, 
+    {registered, []},
+    {applications, [kernel, stdlib, crypto]},
+    {env, []}
+]}.
