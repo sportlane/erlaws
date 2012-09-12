@@ -1,0 +1,8 @@
+{application, erlaws,
+ [
+  {description, "Erlang Amazon WebServices"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, []},
+  {env, []}
+ ]}.
