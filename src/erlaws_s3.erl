@@ -390,7 +390,7 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 
     %%io:format("Request:~n ~p~n", [Request]),
 
-    Reply = http:request( Method, Request, HttpOptions, Options ),
+    Reply = httpc:request( Method, Request, HttpOptions, Options ),
     
     %%     {ok, {Status, ReplyHeaders, RBody}} = Reply,
     %%     io:format("Response:~n ~p~n~p~n~p~n", [Status, ReplyHeaders, 
