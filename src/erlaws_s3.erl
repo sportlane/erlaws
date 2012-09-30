@@ -454,7 +454,7 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
  	    throw ({error, {integer_to_list(HttpCode), ReasonPhrase,
 		proplists:get_value(?S3_REQ_ID_HEADER, ResponseHeaders)}});
 
- 	{ok, {{_HttpVersion, _HttpCode, _ReasonPhrase}, ResponseHeaders, 
+ 	{ok, {{_HttpVersion, HttpCode, ReasonPhrase}, ResponseHeaders, 
 	      ResponseBody }} ->
 	    throw (try mkErr(ResponseBody, ResponseHeaders) of
 		      {error, Reason} -> {error, Reason}

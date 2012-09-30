@@ -1,12 +1,8 @@
 {application, erlaws,
  [
-<<<<<<< HEAD
-  {description, "AWS api"},
-  {vsn, "0.2"},
-  {registered, []},
   {applications, [
-                  kernel,
-                  stdlib,
+      kernel,
+      stdlib,
 		  crypto,
 		  inets
                  ]},
@@ -20,6 +16,5 @@
   {description, "Erlang Amazon WebServices"},
   {vsn, "1"},
   {registered, []},
-  {applications, []},
   {env, []}
  ]}.
