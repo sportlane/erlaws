@@ -258,12 +258,10 @@ get_object(Bucket, Key) ->
 info_object(Bucket, Key) ->
     try genericRequest(head, Bucket, Key, [], [], [], <<>>) of
 	{ok, Headers, _Body} ->
-	    io:format("Headers: ~p~n", [Headers]),
-		MetadataList = [{string:substr(MKey, 12), Value} || {MKey, Value} <- Headers, string:str(MKey, "x-amz-meta") == 1],
 		RequestId = case lists:keytake(?S3_REQ_ID_HEADER, 1, Headers) of
 			{value, {_, ReqId}, _} -> ReqId;
 			_ -> "" end,
-		{ok, MetadataList, {requestId, RequestId}}
+		{ok, Headers, {requestId, RequestId}}
     catch
 	throw:{error, Descr} ->
 	    {error, Descr}
@@ -429,7 +427,7 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
 
-    Reply = http:request( Method, Request, HttpOptions, Options ),
+    Reply = httpc:request( Method, Request, HttpOptions, Options ),
     
     %%     {ok, {Status, ReplyHeaders, RBody}} = Reply,
     %%     io:format("Response:~n ~p~n~p~n~p~n", [Status, ReplyHeaders, 
@@ -451,7 +449,12 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 	    genericRequest(Method, Bucket, Path, QueryParams, 
 			   Metadata, HTTPHeaders, Body, NrOfRetries-1);
 	
- 	{ok, {{_HttpVersion, HttpCode, ReasonPhrase}, ResponseHeaders, 
+ 	{ok, {{_HttpVersion, 404 = HttpCode, ReasonPhrase}, ResponseHeaders, 
+	      Body }} when byte_size(Body) =< 2 ->
+ 	    throw ({error, {integer_to_list(HttpCode), ReasonPhrase,
+		proplists:get_value(?S3_REQ_ID_HEADER, ResponseHeaders)}});
+
+ 	{ok, {{_HttpVersion, _HttpCode, _ReasonPhrase}, ResponseHeaders, 
 	      ResponseBody }} ->
 	    throw (try mkErr(ResponseBody, ResponseHeaders) of
 		      {error, Reason} -> {error, Reason}
