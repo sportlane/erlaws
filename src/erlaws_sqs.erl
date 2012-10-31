@@ -4,7 +4,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(erlaws_sqs,[AWS_KEY, AWS_SEC_KEY, SECURE]).
+-module(erlaws_sqs,[AWS_KEY, AWS_SEC_KEY, SECURE, AWS_SQS_HOST]).
 
 %% exports
 -export([list_queues/0, list_queues/1, get_queue_url/1, create_queue/1,
@@ -17,7 +17,6 @@
 -include_lib("xmerl/include/xmerl.hrl").
 -include("../include/erlaws.hrl").
 
--define(AWS_SQS_HOST, "queue.amazonaws.com").
 -define(AWS_SQS_VERSION, "2008-01-01").
 
 %% queues
@@ -320,7 +319,7 @@ query_request(Action, Parameters) ->
 		true -> Prefix = "http://"
 	end,
 	
-	query_request(Prefix ++ ?AWS_SQS_HOST ++ "/", Action, Parameters).
+	query_request(Prefix ++ AWS_SQS_HOST ++ "/", Action, Parameters).
 
 query_request(Url, Action, Parameters) ->
 	%% io:format("query_request: ~p ~p ~p~n", [Url, Action, Parameters]),
