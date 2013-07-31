@@ -5,6 +5,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
+-compile({parse_transform, erlaws_pmod_pt}).
 -module(erlaws_sdb, [AWS_KEY, AWS_SEC_KEY, SECURE]).
 
 %% exports

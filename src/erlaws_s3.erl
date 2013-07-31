@@ -6,6 +6,7 @@
 %%% Created : 25 Dec 2007 by Sascha Matzke <sascha.matzke@didolo.org>
 %%%-------------------------------------------------------------------
 
+-compile({parse_transform, erlaws_pmod_pt}).
 -module(erlaws_s3, [AWS_KEY, AWS_SEC_KEY, SECURE]).
 
 %% API

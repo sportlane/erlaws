@@ -4,6 +4,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
+-compile({parse_transform, erlaws_pmod_pt}).
 -module(erlaws_sqs,[AWS_KEY, AWS_SEC_KEY, SECURE, AWS_SQS_HOST]).
 
 %% exports
